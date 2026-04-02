@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGraph — Redes como Código</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --cisco-blue: #049fd9;
+    --cisco-dark: #0d274d;
+    --cisco-navy: #1a3a5c;
+    --bg: #0b1929;
+    --panel: #0f2236;
+    --panel-border: #1a3a5c;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-muted: #475569;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --orange: #f97316;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  .scene { height: 100vh; display: flex; flex-direction: column; }
+
+  /* ─── Top bar ─── */
+  .topbar {
+    background: var(--cisco-dark);
+    padding: 16px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .topbar .brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--cisco-blue);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .topbar .brand span { color: var(--text-dim); font-weight: 400; }
+
+  .topbar .status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .topbar .status .dot {
+    width: 8px;
+    height: 8px;
+    background: var(--green);
+    animation: pulse 2s ease infinite;
+  }
+
+  /* ─── Main ─── */
+  .main { flex: 1; display: flex; overflow: hidden; }
+
+  /* ─── Left: Problem input ─── */
+  .left {
+    width: 340px;
+    background: var(--panel);
+    border-right: 1px solid var(--panel-border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 20px 24px 10px;
+  }
+
+  .problem-box {
+    margin: 0 24px;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 80px;
+    transition: border-color 0.3s ease;
+  }
+
+  .problem-box.active { border-color: var(--cisco-blue); }
+
+  .problem-box .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 16px;
+    background: var(--cisco-blue);
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+  }
+
+  /* Requirements list */
+  .reqs {
+    padding: 16px 24px;
+    flex: 1;
+  }
+
+  .req {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: all 0.4s ease;
+  }
+
+  .req.show { opacity: 1; transform: translateX(0); }
+  .req.done { color: var(--green); }
+
+  .req .check {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--panel-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+  }
+
+  .req.done .check { background: var(--green); border-color: var(--green); color: var(--bg); }
+
+  /* Generate button */
+  .btn-generate {
+    margin: 0 24px 24px;
+    padding: 14px;
+    background: var(--cisco-blue);
+    color: white;
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0;
+  }
+
+  .btn-generate.show { opacity: 1; }
+  .btn-generate.working { background: var(--yellow); color: var(--bg); }
+  .btn-generate.done { background: var(--green); }
+
+  /* ─── Center: Topology canvas ─── */
+  .canvas-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .canvas-area svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Grid background */
+  .grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--panel-border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--panel-border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+  }
+
+  /* Devices */
+  .device {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .device.show { opacity: 1; transform: scale(1); }
+
+  .device .icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 2px solid var(--panel-border);
+    background: var(--panel);
+    transition: border-color 0.3s ease;
+  }
+
+  .device.router .icon { border-color: var(--cisco-blue); }
+  .device.switch .icon { border-color: var(--green); }
+  .device.server .icon { border-color: var(--orange); }
+  .device.pc .icon { border-color: var(--text-muted); }
+
+  .device .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .device .ip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    color: var(--text-muted);
+  }
+
+  /* Connections */
+  .connections {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .connections line {
+    stroke: var(--panel-border);
+    stroke-width: 2;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .connections line.show { opacity: 1; }
+  .connections line.active { stroke: var(--cisco-blue); stroke-width: 2; }
+
+  /* ─── Right: Terminal ─── */
+  .terminal {
+    width: 320px;
+    background: #0a0a0a;
+    border-left: 1px solid var(--panel-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .terminal-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #222;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #555;
+  }
+
+  .terminal-body {
+    flex: 1;
+    padding: 12px 16px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  .term-line {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .term-line.show { opacity: 1; transform: translateY(0); }
+  .term-line.cmd { color: var(--green); }
+  .term-line.output { color: #666; }
+  .term-line.success { color: var(--cisco-blue); }
+  .term-line.warn { color: var(--yellow); }
+
+  /* ─── Bottom banner ─── */
+  .banner {
+    padding: 14px 40px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    background: var(--cisco-dark);
+    color: var(--text-muted);
+    border-top: 1px solid var(--panel-border);
+    transition: all 0.5s ease;
+  }
+
+  .banner.active { color: var(--cisco-blue); }
+  .banner.done { color: var(--green); }
+
+  /* ─── Phases ─── */
+  .phases {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background: var(--cisco-dark);
+  }
+
+  .phase { width: 6px; height: 6px; background: var(--text-muted); transition: all 0.5s ease; }
+  .phase.active { background: var(--cisco-blue); width: 28px; }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes dataflow {
+    0% { stroke-dashoffset: 20; }
+    100% { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="scene">
+  <div class="topbar">
+    <span class="brand">NetGraph <span>/ redes como código</span></span>
+    <div class="status">
+      <div class="dot"></div>
+      <span id="engineStatus">Motor listo</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- Left: Problem -->
+    <div class="left">
+      <p class="section-label">Problema</p>
+      <div class="problem-box" id="problemBox"><span class="cursor"></span></div>
+
+      <p class="section-label" style="margin-top:16px;">Requisitos detectados</p>
+      <div class="reqs" id="reqs"></div>
+
+      <button class="btn-generate" id="btnGen">Generar topología</button>
+    </div>
+
+    <!-- Center: Topology -->
+    <div class="canvas-area">
+      <div class="grid-bg"></div>
+      <svg class="connections" id="connections"></svg>
+      <div id="devices"></div>
+    </div>
+
+    <!-- Right: Terminal -->
+    <div class="terminal">
+      <div class="terminal-header">IOS CLI Output</div>
+      <div class="terminal-body" id="terminal"></div>
+    </div>
+  </div>
+
+  <div class="banner" id="banner">Esperando problema de red...</div>
+
+  <div class="phases">
+    <div class="phase" id="ph0"></div>
+    <div class="phase" id="ph1"></div>
+    <div class="phase" id="ph2"></div>
+    <div class="phase" id="ph3"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+function setPhase(n) { for (let i = 0; i < 4; i++) $('ph'+i).className = 'phase' + (i===n ? ' active' : ''); }
+function setBanner(t, c) { const b=$('banner'); b.textContent=t; b.className='banner '+(c||''); }
+
+// Typewriter
+async function typeText(el, text, speed = 35) {
+  el.classList.add('active');
+  const cursor = el.querySelector('.cursor');
+  for (const ch of text) {
+    if (cursor) cursor.insertAdjacentText('beforebegin', ch);
+    else el.textContent += ch;
+    await wait(speed);
+  }
+}
+
+// Requirements
+function addReq(text, done = false) {
+  const d = document.createElement('div');
+  d.className = 'req' + (done ? ' done' : '');
+  d.innerHTML = `<span class="check">${done ? '✓' : ''}</span><span>${text}</span>`;
+  $('reqs').appendChild(d);
+  requestAnimationFrame(() => d.classList.add('show'));
+  return d;
+}
+
+function checkReq(el) {
+  el.classList.add('done');
+  el.querySelector('.check').textContent = '✓';
+}
+
+// Terminal
+function termLine(text, type = 'output') {
+  const d = document.createElement('div');
+  d.className = 'term-line ' + type;
+  d.textContent = text;
+  $('terminal').appendChild(d);
+  requestAnimationFrame(() => d.classList.add('show'));
+  $('terminal').scrollTop = $('terminal').scrollHeight;
+}
+
+// Devices
+function addDevice(id, type, label, ip, x, y) {
+  const icons = { router: '⬡', switch: '⬢', server: '▣', pc: '▢' };
+  const d = document.createElement('div');
+  d.className = `device ${type}`;
+  d.id = 'dev-' + id;
+  d.style.left = x + 'px';
+  d.style.top = y + 'px';
+  d.innerHTML = `<div class="icon">${icons[type]}</div><span class="label">${label}</span><span class="ip">${ip}</span>`;
+  $('devices').appendChild(d);
+  return new Promise(r => requestAnimationFrame(() => { d.classList.add('show'); setTimeout(r, 300); }));
+}
+
+function addConnection(x1, y1, x2, y2, active = false) {
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', x1 + 24); line.setAttribute('y1', y1 + 24);
+  line.setAttribute('x2', x2 + 24); line.setAttribute('y2', y2 + 24);
+  if (active) line.classList.add('active');
+  $('connections').appendChild(line);
+  requestAnimationFrame(() => line.classList.add('show'));
+}
+
+function clearCanvas() {
+  $('devices').innerHTML = '';
+  $('connections').innerHTML = '';
+  $('terminal').innerHTML = '';
+  $('reqs').innerHTML = '';
+  $('problemBox').innerHTML = '<span class="cursor"></span>';
+  $('problemBox').classList.remove('active');
+  const btn = $('btnGen');
+  btn.className = 'btn-generate';
+  btn.textContent = 'Generar topología';
+}
+
+async function run() {
+  // ═══ Phase 0: Define problem ═══
+  setPhase(0);
+  setBanner('Describiendo problema de red...', 'active');
+  $('engineStatus').textContent = 'Analizando';
+
+  await typeText($('problemBox'), 'Necesito conectar 3 sucursales a un servidor central con redundancia. Cada sucursal tiene 10 hosts y necesita DHCP. El enlace principal debe tener failover automático.');
+  await wait(800);
+
+  // Show detected requirements
+  const r1 = addReq('3 redes LAN (sucursales)'); await wait(400);
+  const r2 = addReq('1 servidor central'); await wait(400);
+  const r3 = addReq('Redundancia en enlace principal'); await wait(400);
+  const r4 = addReq('DHCP por sucursal'); await wait(400);
+  const r5 = addReq('Failover automático (HSRP)'); await wait(800);
+
+  $('btnGen').classList.add('show');
+  await wait(1000);
+
+  // ═══ Phase 1: Generate topology ═══
+  setPhase(1);
+  const btn = $('btnGen');
+  btn.classList.add('working');
+  btn.textContent = 'Generando...';
+  setBanner('Generando topología — resolviendo requisitos', 'active');
+  $('engineStatus').textContent = 'Generando';
+  await wait(600);
+
+  // Place devices
+  termLine('> Generando dispositivos...', 'cmd');
+  await wait(300);
+
+  await addDevice('r1', 'router', 'R1-Core', '10.0.0.1', 320, 40);
+  termLine('  Router R1-Core creado', 'output');
+  await addDevice('r2', 'router', 'R2-Backup', '10.0.0.2', 480, 40);
+  termLine('  Router R2-Backup creado (redundancia)', 'output');
+  await wait(200);
+
+  await addDevice('sw1', 'switch', 'SW-Sucursal1', '10.1.0.1', 120, 180);
+  await addDevice('sw2', 'switch', 'SW-Sucursal2', '10.2.0.1', 360, 180);
+  await addDevice('sw3', 'switch', 'SW-Sucursal3', '10.3.0.1', 600, 180);
+  termLine('  3 switches de sucursal creados', 'output');
+  await wait(200);
+
+  await addDevice('srv', 'server', 'SRV-Central', '10.0.0.10', 400, 300);
+  termLine('  Servidor central asignado', 'output');
+
+  await addDevice('pc1', 'pc', 'Hosts-S1', 'DHCP', 60, 310);
+  await addDevice('pc2', 'pc', 'Hosts-S2', 'DHCP', 300, 310);
+  await addDevice('pc3', 'pc', 'Hosts-S3', 'DHCP', 540, 310);
+  termLine('  30 hosts distribuidos (10/sucursal)', 'output');
+  await wait(400);
+
+  checkReq(r1); checkReq(r2);
+
+  // ═══ Phase 2: Configure connections ═══
+  setPhase(2);
+  setBanner('Configurando enlaces y protocolos', 'active');
+  $('engineStatus').textContent = 'Configurando';
+  termLine('', 'output');
+  termLine('> Configurando enlaces...', 'cmd');
+  await wait(300);
+
+  // Core connections
+  addConnection(320, 40, 480, 40, true); // R1-R2
+  termLine('  R1 ↔ R2 — enlace redundante HSRP', 'success');
+  await wait(400);
+
+  addConnection(320, 40, 120, 180); // R1-SW1
+  addConnection(320, 40, 360, 180); // R1-SW2
+  addConnection(480, 40, 600, 180); // R2-SW3
+  termLine('  Routers ↔ Switches conectados', 'output');
+  await wait(400);
+
+  addConnection(480, 40, 360, 180, true); // R2-SW2 backup
+  termLine('  R2 ↔ SW2 — enlace failover', 'success');
+  await wait(400);
+
+  addConnection(120, 180, 60, 310); // SW1-PCs
+  addConnection(360, 180, 300, 310); // SW2-PCs
+  addConnection(600, 180, 540, 310); // SW3-PCs
+  termLine('  Switches ↔ Hosts conectados', 'output');
+  await wait(300);
+
+  addConnection(360, 180, 400, 300); // SW2-Server
+  termLine('  Servidor central en VLAN de gestión', 'output');
+  await wait(500);
+
+  checkReq(r3);
+  termLine('', 'output');
+  termLine('> Aplicando configuración IOS...', 'cmd');
+  await wait(300);
+
+  // IOS config output
+  const iosLines = [
+    ['R1(config)# interface gi0/0', 'cmd'],
+    ['R1(config-if)# ip address 10.0.0.1 255.255.255.0', 'output'],
+    ['R1(config-if)# standby 1 ip 10.0.0.254', 'output'],
+    ['R1(config-if)# standby 1 priority 110', 'output'],
+    ['R1(config-if)# standby 1 preempt', 'success'],
+    ['  HSRP configurado — R1 primario, R2 standby', 'warn'],
+    ['', 'output'],
+    ['R1(config)# ip dhcp pool SUCURSAL1', 'cmd'],
+    ['R1(dhcp-config)# network 10.1.0.0 255.255.255.0', 'output'],
+    ['R1(dhcp-config)# default-router 10.1.0.1', 'output'],
+    ['  DHCP pools configurados para 3 sucursales', 'warn'],
+  ];
+
+  for (const [text, type] of iosLines) {
+    termLine(text, type);
+    await wait(250);
+  }
+
+  checkReq(r4);
+  checkReq(r5);
+  await wait(400);
+
+  termLine('', 'output');
+  termLine('> Verificando conectividad...', 'cmd');
+  await wait(500);
+  termLine('  Ping 10.1.0.10 → 10.0.0.10 ... OK', 'success');
+  await wait(300);
+  termLine('  Ping 10.2.0.10 → 10.0.0.10 ... OK', 'success');
+  await wait(300);
+  termLine('  Ping 10.3.0.10 → 10.0.0.10 ... OK', 'success');
+  await wait(300);
+  termLine('  Failover test R1→R2 ... OK', 'success');
+  await wait(500);
+
+  // ═══ Phase 3: Done ═══
+  setPhase(3);
+  btn.classList.remove('working');
+  btn.classList.add('done');
+  btn.textContent = 'Topología lista';
+  setBanner('Topología generada — lista para desplegar en Packet Tracer', 'done');
+  $('engineStatus').textContent = 'Completado';
+
+  termLine('', 'output');
+  termLine('═══ Topología lista para exportar ═══', 'success');
+  await wait(5000);
+
+  // Reset
+  clearCanvas();
+  run();
+}
+
+setTimeout(run, 800);
+</script>
+</body>
+</html>
