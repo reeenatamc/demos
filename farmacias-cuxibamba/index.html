@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farmacias Cuxibamba — POS Offline</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --blue: #1e3a5f;
+    --blue-light: #2a5a8f;
+    --yellow: #f5c518;
+    --yellow-soft: #fef3c7;
+    --bg: #fafafa;
+    --zinc-100: #f4f4f5;
+    --zinc-200: #e4e4e7;
+    --zinc-300: #d4d4d8;
+    --zinc-400: #a1a1aa;
+    --zinc-500: #71717a;
+    --zinc-700: #3f3f46;
+    --zinc-900: #18181b;
+    --green: #22c55e;
+    --red: #ef4444;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--zinc-900);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ─── Layout ─── */
+  .scene {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .container {
+    width: 90%;
+    max-width: 1100px;
+    position: relative;
+  }
+
+  /* ─── Header ─── */
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+    opacity: 0;
+    animation: fadeUp 0.8s ease forwards;
+  }
+
+  .header .brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 6px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--zinc-900);
+    letter-spacing: -0.5px;
+  }
+
+  .header h1 span { color: var(--blue); }
+
+  /* ─── POS + Cloud layout ─── */
+  .sync-layout {
+    display: flex;
+    gap: 24px;
+    align-items: stretch;
+    opacity: 0;
+    animation: fadeUp 0.8s 0.3s ease forwards;
+  }
+
+  /* ─── POS Panel ─── */
+  .pos-panel {
+    flex: 1.2;
+    background: white;
+    border: 1px solid var(--zinc-200);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pos-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--zinc-100);
+    background: var(--blue);
+  }
+
+  .pos-header .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: white;
+    font-weight: 500;
+  }
+
+  .wifi-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.5s ease;
+  }
+
+  .wifi-indicator .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    transition: background 0.5s ease;
+  }
+
+  .wifi-indicator.offline .dot { background: var(--red); }
+  .wifi-indicator .label { color: rgba(255,255,255,0.7); }
+
+  .pos-body { padding: 16px; flex: 1; }
+
+  /* Cart items */
+  .cart { margin-bottom: 12px; }
+
+  .cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--zinc-100);
+    font-size: 12px;
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: all 0.4s ease;
+  }
+
+  .cart-item.show {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .cart-item .name { color: var(--zinc-700); font-weight: 500; }
+  .cart-item .qty { color: var(--zinc-400); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .cart-item .price { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--zinc-900); font-size: 12px; }
+
+  .cart-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-top: 2px solid var(--zinc-900);
+    margin-top: 4px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .cart-total .amount {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--blue);
+  }
+
+  .btn-pay {
+    width: 100%;
+    padding: 10px;
+    background: var(--yellow);
+    color: var(--blue);
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 6px;
+  }
+
+  .btn-pay.success {
+    background: var(--green);
+    color: white;
+  }
+
+  /* ─── Middle: Sync channel ─── */
+  .sync-channel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 80px;
+    position: relative;
+  }
+
+  .sync-line {
+    width: 2px;
+    height: 60px;
+    background: var(--zinc-200);
+    position: relative;
+    overflow: hidden;
+    border-radius: 1px;
+  }
+
+  .sync-line .pulse {
+    position: absolute;
+    width: 2px;
+    height: 20px;
+    background: var(--blue);
+    border-radius: 1px;
+    opacity: 0;
+  }
+
+  .sync-line .pulse.up {
+    animation: pulseUp 1.5s ease infinite;
+  }
+
+  .sync-line .pulse.down {
+    animation: pulseDown 1.5s 0.5s ease infinite;
+  }
+
+  .sync-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--zinc-400);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+  }
+
+  .sync-channel.offline .sync-line { background: var(--red); opacity: 0.2; }
+  .sync-channel.offline .pulse { display: none; }
+  .sync-channel.offline .sync-label { color: var(--red); }
+
+  .sync-channel.syncing .sync-line { background: var(--green); opacity: 0.3; }
+  .sync-channel.syncing .pulse { background: var(--green); }
+
+  /* ─── Cloud Panel ─── */
+  .cloud-panel {
+    flex: 0.8;
+    background: white;
+    border: 1px solid var(--zinc-200);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cloud-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--zinc-100);
+    background: var(--zinc-100);
+  }
+
+  .cloud-header .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--zinc-500);
+    font-weight: 500;
+  }
+
+  .cloud-body { padding: 16px; flex: 1; }
+
+  .cloud-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--zinc-100);
+  }
+
+  .cloud-stat .label {
+    font-size: 11px;
+    color: var(--zinc-400);
+  }
+
+  .cloud-stat .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--zinc-900);
+    transition: all 0.3s ease;
+  }
+
+  /* ─── Queue ─── */
+  .queue {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--zinc-100);
+  }
+
+  .queue-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--zinc-400);
+    margin-bottom: 8px;
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: all 0.3s ease;
+  }
+
+  .queue-item.show { opacity: 1; transform: translateY(0); }
+
+  .queue-item .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .queue-item .status-dot.pending { background: var(--yellow); }
+  .queue-item .status-dot.synced { background: var(--green); }
+  .queue-item .status-dot.processing { background: var(--blue); animation: blink 1s ease infinite; }
+
+  .queue-item .order-id { color: var(--zinc-400); }
+  .queue-item .order-status {
+    margin-left: auto;
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .queue-item .order-status.pending { color: var(--yellow); }
+  .queue-item .order-status.synced { color: var(--green); }
+  .queue-item .order-status.processing { color: var(--blue); }
+
+  /* ─── Status bar ─── */
+  .status-bar {
+    text-align: center;
+    margin-top: 32px;
+    opacity: 0;
+    animation: fadeUp 0.8s 0.6s ease forwards;
+  }
+
+  .status-bar .message {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--zinc-400);
+    transition: all 0.5s ease;
+    min-height: 16px;
+  }
+
+  .status-bar .message.highlight { color: var(--blue); font-weight: 500; }
+  .status-bar .message.warning { color: var(--red); }
+  .status-bar .message.success { color: var(--green); }
+
+  /* ─── Phase indicator ─── */
+  .phases {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 16px;
+  }
+
+  .phase-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--zinc-300);
+    transition: all 0.5s ease;
+  }
+
+  .phase-dot.active {
+    background: var(--blue);
+    width: 20px;
+    border-radius: 2px;
+  }
+
+  /* ─── Offline overlay ─── */
+  .offline-flash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(239, 68, 68, 0.03);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 100;
+  }
+
+  .offline-flash.show { opacity: 1; }
+
+  /* ─── Animations ─── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulseUp {
+    0% { top: 100%; opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { top: -20px; opacity: 0; }
+  }
+
+  @keyframes pulseDown {
+    0% { top: -20px; opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+</style>
+</head>
+<body>
+
+<div class="offline-flash" id="offlineFlash"></div>
+
+<div class="scene">
+  <div class="container">
+    <div class="header">
+      <p class="brand">Farmacias Cuxibamba</p>
+      <h1>POS <span>Offline</span> — Sincronización en tiempo real</h1>
+    </div>
+
+    <div class="sync-layout">
+      <!-- POS LOCAL -->
+      <div class="pos-panel">
+        <div class="pos-header">
+          <span class="title">POS Local</span>
+          <div class="wifi-indicator" id="wifi">
+            <div class="dot"></div>
+            <span class="label">Online</span>
+          </div>
+        </div>
+        <div class="pos-body">
+          <div class="cart" id="cart"></div>
+          <div class="cart-total" id="cartTotal" style="display:none;">
+            <span>Total</span>
+            <span class="amount" id="totalAmount">$0.00</span>
+          </div>
+          <button class="btn-pay" id="btnPay" style="display:none;">Procesar venta</button>
+
+          <div class="queue" id="queueSection" style="display:none;">
+            <p class="queue-title">Cola de sincronización</p>
+            <div id="queue"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sync channel -->
+      <div class="sync-channel" id="syncChannel">
+        <div class="sync-line">
+          <div class="pulse up"></div>
+          <div class="pulse down"></div>
+        </div>
+        <span class="sync-label">sync</span>
+        <div class="sync-line">
+          <div class="pulse up"></div>
+          <div class="pulse down"></div>
+        </div>
+      </div>
+
+      <!-- Cloud -->
+      <div class="cloud-panel">
+        <div class="cloud-header">
+          <span class="title">Cloud</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--zinc-400);">Central</span>
+        </div>
+        <div class="cloud-body">
+          <div class="cloud-stat">
+            <span class="label">Órdenes hoy</span>
+            <span class="value" id="cloudOrders">23</span>
+          </div>
+          <div class="cloud-stat">
+            <span class="label">Ventas</span>
+            <span class="value" id="cloudSales">$1,847.50</span>
+          </div>
+          <div class="cloud-stat">
+            <span class="label">Sucursales</span>
+            <span class="value">3</span>
+          </div>
+          <div class="cloud-stat">
+            <span class="label">Productos sync</span>
+            <span class="value" id="cloudProducts">1,204</span>
+          </div>
+          <div class="cloud-stat">
+            <span class="label">Última sync</span>
+            <span class="value" id="cloudSync">Ahora</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <p class="message" id="statusMsg">Iniciando turno matutino...</p>
+      <div class="phases">
+        <div class="phase-dot" id="p0"></div>
+        <div class="phase-dot" id="p1"></div>
+        <div class="phase-dot" id="p2"></div>
+        <div class="phase-dot" id="p3"></div>
+        <div class="phase-dot" id="p4"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const products = [
+  { name: 'Paracetamol 500mg', qty: 2, price: 1.50 },
+  { name: 'Ibuprofeno 400mg', qty: 1, price: 2.80 },
+  { name: 'Vitamina C efervescente', qty: 3, price: 4.20 },
+  { name: 'Alcohol antiséptico', qty: 1, price: 3.50 },
+  { name: 'Omeprazol 20mg', qty: 2, price: 5.60 },
+  { name: 'Loratadina 10mg', qty: 1, price: 1.90 },
+];
+
+const $ = id => document.getElementById(id);
+let orderCount = 0;
+let currentPhase = -1;
+let totalSales = 1847.50;
+let cloudOrderCount = 23;
+
+function setPhase(n) {
+  for (let i = 0; i < 5; i++) {
+    $('p' + i).className = 'phase-dot' + (i === n ? ' active' : '');
+  }
+  currentPhase = n;
+}
+
+function setStatus(msg, type = '') {
+  const el = $('statusMsg');
+  el.textContent = msg;
+  el.className = 'message' + (type ? ' ' + type : '');
+}
+
+function setWifi(online) {
+  const el = $('wifi');
+  el.className = 'wifi-indicator' + (online ? '' : ' offline');
+  el.querySelector('.label').textContent = online ? 'Online' : 'Offline';
+}
+
+function setSyncChannel(state) {
+  $('syncChannel').className = 'sync-channel' + (state ? ' ' + state : '');
+}
+
+function addCartItem(product, delay) {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      const cart = $('cart');
+      const div = document.createElement('div');
+      div.className = 'cart-item';
+      div.innerHTML = `
+        <div><span class="name">${product.name}</span> <span class="qty">×${product.qty}</span></div>
+        <span class="price">$${(product.qty * product.price).toFixed(2)}</span>
+      `;
+      cart.appendChild(div);
+      requestAnimationFrame(() => div.classList.add('show'));
+      resolve();
+    }, delay);
+  });
+}
+
+function showTotal(items) {
+  const total = items.reduce((s, p) => s + p.qty * p.price, 0);
+  $('totalAmount').textContent = '$' + total.toFixed(2);
+  $('cartTotal').style.display = 'flex';
+  $('btnPay').style.display = 'block';
+  return total;
+}
+
+function processSale() {
+  return new Promise(resolve => {
+    const btn = $('btnPay');
+    btn.textContent = 'Procesando...';
+    setTimeout(() => {
+      btn.classList.add('success');
+      btn.textContent = 'Venta completada';
+      orderCount++;
+      resolve();
+    }, 800);
+  });
+}
+
+function addQueueItem(id, status) {
+  $('queueSection').style.display = 'block';
+  const queue = $('queue');
+  const existing = queue.querySelector(`[data-id="${id}"]`);
+  if (existing) {
+    existing.querySelector('.status-dot').className = 'status-dot ' + status;
+    existing.querySelector('.order-status').className = 'order-status ' + status;
+    existing.querySelector('.order-status').textContent = status;
+    return;
+  }
+  const div = document.createElement('div');
+  div.className = 'queue-item';
+  div.dataset.id = id;
+  div.innerHTML = `
+    <span class="status-dot ${status}"></span>
+    <span class="order-id">#ORD-${String(id).padStart(4, '0')}</span>
+    <span class="order-status ${status}">${status}</span>
+  `;
+  queue.appendChild(div);
+  requestAnimationFrame(() => div.classList.add('show'));
+}
+
+function clearCart() {
+  $('cart').innerHTML = '';
+  $('cartTotal').style.display = 'none';
+  $('btnPay').style.display = 'none';
+  $('btnPay').className = 'btn-pay';
+  $('btnPay').textContent = 'Procesar venta';
+}
+
+function updateCloud(amount) {
+  cloudOrderCount++;
+  totalSales += amount;
+  $('cloudOrders').textContent = cloudOrderCount;
+  $('cloudSales').textContent = '$' + totalSales.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  $('cloudSync').textContent = 'Ahora';
+}
+
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── Main sequence ───
+async function run() {
+  // Phase 0: Normal sale (online)
+  setPhase(0);
+  setStatus('Venta normal — conexión estable', 'highlight');
+  const sale1 = products.slice(0, 3);
+  for (let i = 0; i < sale1.length; i++) await addCartItem(sale1[i], i * 400);
+  await wait(400);
+  const total1 = showTotal(sale1);
+  await wait(1000);
+  await processSale();
+  addQueueItem(1001, 'synced');
+  updateCloud(total1);
+  setStatus('Orden sincronizada al cloud', 'success');
+  await wait(2000);
+
+  // Phase 1: Internet drops
+  setPhase(1);
+  clearCart();
+  $('offlineFlash').classList.add('show');
+  setWifi(false);
+  setSyncChannel('offline');
+  setStatus('Conexión perdida — modo offline activado', 'warning');
+  await wait(800);
+  $('offlineFlash').classList.remove('show');
+  await wait(1500);
+
+  // Phase 2: Sales continue offline
+  setPhase(2);
+  setStatus('La farmacia sigue vendiendo sin internet', 'highlight');
+  const sale2 = products.slice(3, 5);
+  for (let i = 0; i < sale2.length; i++) await addCartItem(sale2[i], i * 400);
+  await wait(400);
+  const total2 = showTotal(sale2);
+  await wait(1000);
+  await processSale();
+  addQueueItem(1002, 'pending');
+  setStatus('Venta guardada en cola local', '');
+  await wait(1500);
+
+  clearCart();
+  const sale3 = [products[5], products[0]];
+  for (let i = 0; i < sale3.length; i++) await addCartItem(sale3[i], i * 400);
+  await wait(400);
+  const total3 = showTotal(sale3);
+  await wait(1000);
+  await processSale();
+  addQueueItem(1003, 'pending');
+  setStatus('2 órdenes en cola — esperando conexión', '');
+  $('cloudSync').textContent = '3 min';
+  await wait(2500);
+
+  // Phase 3: Internet returns
+  setPhase(3);
+  clearCart();
+  setWifi(true);
+  setSyncChannel('syncing');
+  setStatus('Conexión restablecida — sincronizando...', 'highlight');
+  await wait(1000);
+
+  addQueueItem(1002, 'processing');
+  setStatus('Subiendo orden #ORD-1002...', 'highlight');
+  await wait(1200);
+  addQueueItem(1002, 'synced');
+  updateCloud(total2);
+  await wait(600);
+
+  addQueueItem(1003, 'processing');
+  setStatus('Subiendo orden #ORD-1003...', 'highlight');
+  await wait(1200);
+  addQueueItem(1003, 'synced');
+  updateCloud(total3);
+  await wait(500);
+
+  // Phase 4: All synced
+  setPhase(4);
+  setSyncChannel('');
+  setStatus('Todo sincronizado — 0 órdenes pendientes', 'success');
+  await wait(4000);
+
+  // Reset and loop
+  $('queue').innerHTML = '';
+  $('queueSection').style.display = 'none';
+  clearCart();
+  setWifi(true);
+  setSyncChannel('');
+  cloudOrderCount = 23;
+  totalSales = 1847.50;
+  $('cloudOrders').textContent = '23';
+  $('cloudSales').textContent = '$1,847.50';
+  $('cloudSync').textContent = 'Ahora';
+  run();
+}
+
+// Start after page load
+setTimeout(run, 1000);
+</script>
+</body>
+</html>
